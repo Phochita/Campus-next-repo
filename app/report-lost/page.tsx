@@ -67,10 +67,13 @@ export default function ReportLost() {
         </div>
 
         <div className="text-center mt-16">
-          <button className="px-12 py-5 bg-green-500 hover:bg-green-600 text-white text-xl font-semibold rounded-full shadow-xl transition transform hover:scale-105">
-            View More Lost Items
-          </button>
-        </div>
+        <a
+        href="/lost"
+         className="px-12 py-5 bg-green-500 hover:bg-green-600 text-white text-xl font-semibold rounded-full shadow-xl transition transform hover:scale-105"
+        >
+        View More Lost Items
+      </a>
+      </div>
       </div>
     </div>
   );

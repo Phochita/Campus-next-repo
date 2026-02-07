@@ -66,10 +66,13 @@ export default function ReportFound() {
         </div>
 
         <div className="text-center mt-16">
-          <button className="px-12 py-5 bg-purple-500 hover:bg-purple-600 text-white text-xl font-semibold rounded-full shadow-xl transition transform hover:scale-105">
-            View More Found Items
-          </button>
-        </div>
+        <a
+        href="/found"
+         className="px-12 py-5 bg-purple-500 hover:bg-purple-600 text-white text-xl font-semibold rounded-full shadow-xl transition transform hover:scale-105"
+      >
+        View More Found Items
+        </a>
+      </div>
       </div>
     </div>
   );
