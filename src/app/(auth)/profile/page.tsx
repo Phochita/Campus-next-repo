@@ -50,18 +50,17 @@ export default function Profile() {
 
         setUser(data.user);
         setEditedUser(data.user);
-<<<<<<< HEAD
+ 
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         console.error('Profile error:', message);
         setErrorMessage(message);
         toast.error('Cannot load profile');
-=======
+
       } catch (err: any) {  // ← add :any here
-  console.error('Profile error:', err.message);
-  setErrorMessage(err.message || 'Unknown error');
-  toast.error('Cannot load profile');
->>>>>>> df07f1ec76d9bbb92f62b9831585fa653e41367f
+    console.error('Profile error:', err.message);
+    setErrorMessage(err.message || 'Unknown error');
+    toast.error('Cannot load profile');
       } finally {
         setLoading(false);
       }
