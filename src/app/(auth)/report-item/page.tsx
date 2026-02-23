@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
 
 export default function ReportItem() {
   const searchParams = useSearchParams();
@@ -16,12 +18,30 @@ export default function ReportItem() {
     description: '',
     date: '',
     location: '',
-    photos: [] as string[],
+    photos: [] as File[],
+    previews: [] as string[],
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+
+  useEffect(() => {
+    // Force load session on page open + listen for changes
+    supabase.auth.getSession(); // trigger initial load
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+        console.log('Session refreshed or signed in:', session?.user?.email);
+      }
+      if (event === 'SIGNED_OUT') {
+        toast.error('Logged out - redirecting');
+        router.push('/login');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [router]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -30,12 +50,14 @@ export default function ReportItem() {
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (files && formData.photos.length < 3) {
-      const newPhotos = Array.from(files)
-        .filter(file => file.type.startsWith('image/'))
-        .slice(0, 3 - formData.photos.length)
-        .map(file => URL.createObjectURL(file));
-      setFormData(prev => ({ ...prev, photos: [...prev.photos, ...newPhotos] }));
+    if (files && formData.photos.length + files.length <= 3) {
+      const newFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+      const newPreviews = newFiles.map(file => URL.createObjectURL(file));
+      setFormData(prev => ({
+        ...prev,
+        photos: [...prev.photos, ...newFiles],
+        previews: [...prev.previews, ...newPreviews],
+      }));
     }
   };
 
@@ -43,17 +65,15 @@ export default function ReportItem() {
     setFormData(prev => ({
       ...prev,
       photos: prev.photos.filter((_, i) => i !== index),
+      previews: prev.previews.filter((_, i) => i !== index),
     }));
   };
 
   const handleDrag = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setDragActive(false);
-    }
+    if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true);
+    if (e.type === 'dragleave') setDragActive(false);
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -62,56 +82,81 @@ export default function ReportItem() {
     setDragActive(false);
 
     const files = e.dataTransfer.files;
-    if (files && formData.photos.length < 3) {
-      const newPhotos = Array.from(files)
-        .filter(file => file.type.startsWith('image/'))
-        .slice(0, 3 - formData.photos.length)
-        .map(file => URL.createObjectURL(file));
-      setFormData(prev => ({ ...prev, photos: [...prev.photos, ...newPhotos] }));
+    if (files && formData.photos.length + files.length <= 3) {
+      const newFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+      const newPreviews = newFiles.map(file => URL.createObjectURL(file));
+      setFormData(prev => ({
+        ...prev,
+        photos: [...prev.photos, ...newFiles],
+        previews: [...prev.previews, ...newPreviews],
+      }));
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      // Save to localStorage
-      const items = JSON.parse(localStorage.getItem('reportedItems') || '[]');
-      items.push({
-        id: Date.now(),
-        type,
-        ...formData,
-        submittedAt: new Date().toISOString(),
-      });
-      localStorage.setItem('reportedItems', JSON.stringify(items));
+    try {
+      const form = new FormData();
+      form.append('title', formData.title);
+      form.append('description', formData.description);
+      form.append('location', formData.location);
+      form.append('date', formData.date);
+      form.append('type', type);
 
-      // Show success screen
-      setIsSubmitting(false);
+      // FIXED: Append all photos with the correct name 'photos' (server expects this)
+      formData.photos.forEach((file) => {
+        form.append('photos', file);
+      });
+
+      const res = await fetch('/api/report-item', {
+        method: 'POST',
+        body: form,
+        credentials: 'include', // send cookies to server
+      });
+
+      let data = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = { error: 'Server sent bad response' };
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || `Server error (${res.status})`);
+      }
+
+      toast.success('Item reported successfully!', {
+        description: 'Thank you — it has been added.',
+      });
+
       setShowSuccess(true);
 
-      // Auto-redirect after 5 seconds
       setTimeout(() => {
         router.push('/');
-      }, 5000);
-    }, 1500);
+      }, 3000);
+    } catch (err: any) {
+      toast.error('Failed to report', {
+        description: err.message || 'Please try again.',
+      });
+      console.error('Submit error:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 relative">
-      {/* Main Form */}
       <div className={`flex items-center justify-center px-4 py-12 transition-opacity duration-500 ${showSuccess ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl overflow-hidden">
-          {/* Header */}
           <div className="h-32 bg-gradient-to-r from-pink-400 to-purple-400 relative flex items-center justify-center">
             <h1 className="text-2xl font-bold text-white">
               Campus Report {isLost ? 'Lost' : 'Found'}
             </h1>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleSubmit} className="p-8 space-y-6">
-            {/* Title */}
             <div>
               <label className="block text-sm font-medium text-gray-600 mb-1">Title</label>
               <input
@@ -125,7 +170,6 @@ export default function ReportItem() {
               />
             </div>
 
-            {/* Description & Date */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">Description</label>
@@ -152,7 +196,6 @@ export default function ReportItem() {
               </div>
             </div>
 
-            {/* Location */}
             <div>
               <label className="block text-sm font-medium text-gray-600 mb-1">Last seen / Found location</label>
               <input
@@ -166,12 +209,10 @@ export default function ReportItem() {
               />
             </div>
 
-            {/* Photos - with drag & drop */}
             <div>
               <label className="block text-sm font-medium text-gray-600 mb-1">Upload photos (Max 3)</label>
               <div
-                className={`border-2 border-dashed rounded-lg p-6 text-center bg-pink-50 transition-all duration-200 cursor-pointer
-                  ${dragActive ? 'border-purple-500 bg-purple-50 border-4 scale-105' : 'border-pink-300'}`}
+                className={`border-2 border-dashed rounded-lg p-6 text-center bg-pink-50 transition-all duration-200 cursor-pointer ${dragActive ? 'border-purple-500 bg-purple-50 border-4 scale-105' : 'border-pink-300'}`}
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
                 onDragOver={handleDrag}
@@ -184,6 +225,7 @@ export default function ReportItem() {
                   onChange={handlePhotoChange}
                   className="hidden"
                   id="photos-upload"
+                  name="photos"
                 />
                 <label htmlFor="photos-upload">
                   <p className="text-gray-600 font-medium">
@@ -193,13 +235,12 @@ export default function ReportItem() {
                 </label>
               </div>
 
-              {/* Preview */}
-              {formData.photos.length > 0 && (
+              {formData.previews.length > 0 && (
                 <div className="mt-4 grid grid-cols-3 gap-2">
-                  {formData.photos.map((photo, index) => (
+                  {formData.previews.map((preview, index) => (
                     <div key={index} className="relative">
                       <Image
-                        src={photo}
+                        src={preview}
                         alt={`Preview ${index + 1}`}
                         width={100}
                         height={100}
@@ -218,12 +259,10 @@ export default function ReportItem() {
               )}
             </div>
 
-            {/* Submit */}
             <button
               type="submit"
               disabled={isSubmitting}
-              className={`w-full py-3.5 text-white font-semibold rounded-full transition shadow-lg flex items-center justify-center gap-2
-                ${isSubmitting ? 'bg-purple-400 cursor-not-allowed' : 'bg-[#18A0FB]'}`}
+              className={`w-full py-3.5 text-white font-semibold rounded-full transition shadow-lg flex items-center justify-center gap-2 ${isSubmitting ? 'bg-purple-400 cursor-not-allowed' : 'bg-[#18A0FB]'}`}
             >
               {isSubmitting ? (
                 <>
@@ -241,7 +280,6 @@ export default function ReportItem() {
         </div>
       </div>
 
-      {/* Success Overlay */}
       {showSuccess && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-white rounded-3xl p-10 max-w-md w-full text-center shadow-2xl animate-fade-in">

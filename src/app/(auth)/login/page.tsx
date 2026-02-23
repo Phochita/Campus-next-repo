@@ -56,9 +56,9 @@ export default function LoginPage() {
         description: 'Welcome back!',
       })
 
-      // Auto-redirect to home after 1.5 seconds
+      // Auto-redirect after success
       setTimeout(() => {
-        window.location.href = '/'
+        window.location.href = '/profile'
       }, 1500)
 
       form.reset()

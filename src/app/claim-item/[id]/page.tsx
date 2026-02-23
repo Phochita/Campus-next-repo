@@ -16,6 +16,7 @@ export default function ClaimItem() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -28,29 +29,55 @@ export default function ClaimItem() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setError(null);
 
-    setTimeout(() => {
-      // Fake submit - later connect to real backend
-      setIsSubmitting(false);
+    try {
+      const data = new FormData();
+      data.append('itemId', id as string);
+      data.append('fullName', formData.fullName);
+      data.append('email', formData.email);
+      data.append('proofDescription', formData.proofDescription);
+      if (formData.proofFile) {
+        data.append('proofFile', formData.proofFile);
+      }
+
+      const res = await fetch('/api/claim-item', {
+        method: 'POST',
+        body: data,
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to submit claim');
+      }
+
       setShowSuccess(true);
 
-      // Auto-return to home after 4 seconds (or user clicks button)
       setTimeout(() => {
         router.push('/');
       }, 4000);
-    }, 1500);
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 relative flex items-center justify-center px-4 py-12">
-      {/* Form - fades out when success shows */}
       <div className={`max-w-lg w-full bg-white rounded-3xl shadow-2xl overflow-hidden p-10 transition-opacity duration-500 ${showSuccess ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <h1 className="text-4xl font-bold text-center mb-10 text-gray-800">
           Claim Item
         </h1>
+
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-center">
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-8">
           <div>
@@ -123,7 +150,6 @@ export default function ClaimItem() {
         </form>
       </div>
 
-      {/* Success Overlay */}
       {showSuccess && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in">
           <div className="bg-white rounded-3xl p-12 max-w-md w-full text-center shadow-2xl">

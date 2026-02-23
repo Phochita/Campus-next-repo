@@ -23,28 +23,31 @@ export async function POST(request: Request) {
     // Hash password (10 rounds = safe & fast)
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Insert new user
+    // Insert new user — use snake_case column names to match Supabase
     const [newUser] = await db.insert(users).values({
-      firstName: firstName || '',
-      lastName: lastName || '',
+      first_name: firstName || '',
+      last_name: lastName || '',
       email,
       password: hashedPassword,
-      role: 'student', // default — change later if needed
+      role: 'student', // default
       contact: contact || '',
     }).returning();
 
-    // Auto-login by setting cookie
+    console.log('New user created:', newUser.user_id, newUser.email);
+
+    // Auto-login by setting cookie — use user_id (not id)
     const response = NextResponse.json({ success: true, user: newUser });
-    response.cookies.set('userId', newUser.id.toString(), {
+    response.cookies.set('userId', newUser.user_id.toString(), {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 60 * 60 * 24 * 7, // 7 days
       path: '/',
+      sameSite: 'lax',
     });
 
     return response;
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+    console.error('Signup crash:', error);
+    return NextResponse.json({ error: 'Server error - try again' }, { status: 500 });
   }
 }
