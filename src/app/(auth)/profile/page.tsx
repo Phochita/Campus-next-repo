@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';  // your Supabase client
+import { supabase } from '@/lib/supabase';
 
 export default function Profile() {
   const router = useRouter();
@@ -50,9 +50,10 @@ export default function Profile() {
 
         setUser(data.user);
         setEditedUser(data.user);
-      } catch (err) {
-        console.error('Profile error:', err.message);
-        setErrorMessage(err.message || 'Unknown error');
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        console.error('Profile error:', message);
+        setErrorMessage(message);
         toast.error('Cannot load profile');
       } finally {
         setLoading(false);
@@ -81,24 +82,26 @@ export default function Profile() {
     setRotation(prev => (prev + 90) % 360);
   };
 
-  // FIXED: Upload directly to Supabase Storage (bucket: avatars)
-  // Saves URL to users.avatar column
-  // Avatar stays after refresh
+  // FIXED: Safe avatar save with Supabase UUID
   const handleSaveAvatar = async () => {
     if (!uploadedImage) return;
 
     setIsSaving(true);
 
     try {
-      // 1. Convert preview to file blob
+      // Get real logged-in user UUID
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) throw new Error('Not logged in');
+
+      // Convert preview to blob
       const response = await fetch(uploadedImage);
       const blob = await response.blob();
 
-      // 2. Unique filename (user_id + timestamp)
-      const fileName = `${user.user_id}_${Date.now()}.jpg`;
+      // Unique filename with UUID
+      const fileName = `${authUser.id}_${Date.now()}.jpg`;
 
-      // 3. Upload to Supabase bucket 'avatars' (must exist & public)
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      // Upload to avatars bucket
+      const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(fileName, blob, {
           cacheControl: '3600',
@@ -107,31 +110,30 @@ export default function Profile() {
 
       if (uploadError) throw uploadError;
 
-      // 4. Get public URL
-      const { data: urlData } = supabase.storage
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
         .from('avatars')
         .getPublicUrl(fileName);
 
-      const avatarUrl = urlData.publicUrl;
-
-      // 5. Save URL to users table
+      // Save URL to users table with UUID
       const { error: updateError } = await supabase
         .from('users')
-        .update({ avatar: avatarUrl })
-        .eq('user_id', user.user_id);
+        .update({ avatar: publicUrl })
+        .eq('user_id', authUser.id);
 
       if (updateError) throw updateError;
 
-      // 6. Update local state
-      setUser(prev => ({ ...prev, avatar: avatarUrl }));
-      setEditedUser(prev => ({ ...prev, avatar: avatarUrl }));
+      // Update local state
+      setUser(prev => ({ ...prev, avatar: publicUrl }));
+      setEditedUser(prev => ({ ...prev, avatar: publicUrl }));
       setShowSaveModal(false);
       setUploadedImage(null);
       setRotation(0);
       toast.success('Avatar saved permanently!');
 
-    } catch (err) {
-      console.error('Avatar save failed:', err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      console.error('Avatar save failed:', message);
       toast.error('Failed to save avatar — check console');
     } finally {
       setIsSaving(false);
@@ -186,7 +188,7 @@ export default function Profile() {
         <div className="absolute top-16 left-1/2 transform -translate-x-1/2">
           <div className="w-32 h-32 rounded-full border-4 border-white overflow-hidden shadow-2xl bg-white relative">
             <Image
-              src={user.avatar || '/images/default-avatar.jpg'}
+              src={user?.avatar || '/images/default-avatar.jpg'}
               alt="Avatar"
               fill
               className="object-cover"
@@ -218,13 +220,13 @@ export default function Profile() {
               <input
                 type="text"
                 name="first_name"
-                value={editedUser.first_name || ''}
+                value={editedUser?.first_name || ''}
                 onChange={handleChange}
                 className="w-full px-4 py-3 bg-pink-50 border border-pink-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-pink-400"
               />
             ) : (
               <div className="w-full px-4 py-3 bg-pink-50 border border-pink-200 rounded-lg text-gray-900 font-medium">
-                {user.first_name || 'Not set'} {user.last_name || ''}
+                {user?.first_name || 'Not set'} {user?.last_name || ''}
               </div>
             )}
           </div>
@@ -232,14 +234,14 @@ export default function Profile() {
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1">Email</label>
             <div className="w-full px-4 py-3 bg-pink-50 border border-pink-200 rounded-lg text-gray-900 font-medium">
-              {user.email || 'Not set'}
+              {user?.email || 'Not set'}
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1">Role</label>
             <div className="w-full px-4 py-3 bg-pink-50 border border-pink-200 rounded-lg text-gray-900 font-medium capitalize">
-              {user.role || 'Not set'}
+              {user?.role || 'Not set'}
             </div>
           </div>
 
@@ -249,13 +251,13 @@ export default function Profile() {
               <input
                 type="text"
                 name="contact"
-                value={editedUser.contact || ''}
+                value={editedUser?.contact || ''}
                 onChange={handleChange}
                 className="w-full px-4 py-3 bg-pink-50 border border-pink-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-pink-400"
               />
             ) : (
               <div className="w-full px-4 py-3 bg-pink-50 border border-pink-200 rounded-lg text-gray-900 font-medium">
-                {user.contact || 'Not set'}
+                {user?.contact || 'Not set'}
               </div>
             )}
           </div>
@@ -263,7 +265,7 @@ export default function Profile() {
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1">Joined</label>
             <div className="w-full px-4 py-3 bg-pink-50 border border-pink-200 rounded-lg text-gray-900 font-medium">
-              {user.created_at
+              {user?.created_at
                 ? new Date(user.created_at).toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'long',
