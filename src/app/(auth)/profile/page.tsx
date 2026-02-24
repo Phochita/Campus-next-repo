@@ -50,17 +50,11 @@ export default function Profile() {
 
         setUser(data.user);
         setEditedUser(data.user);
- 
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         console.error('Profile error:', message);
         setErrorMessage(message);
         toast.error('Cannot load profile');
-
-      } catch (err: any) {  // ← add :any here
-    console.error('Profile error:', err.message);
-    setErrorMessage(err.message || 'Unknown error');
-    toast.error('Cannot load profile');
       } finally {
         setLoading(false);
       }
@@ -88,7 +82,7 @@ export default function Profile() {
     setRotation(prev => (prev + 90) % 360);
   };
 
-  // FIXED: Safe avatar save with Supabase UUID
+  // Avatar save (fixed with UUID)
   const handleSaveAvatar = async () => {
     if (!uploadedImage) return;
 
@@ -136,7 +130,6 @@ export default function Profile() {
       setUploadedImage(null);
       setRotation(0);
       toast.success('Avatar saved permanently!');
-
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       console.error('Avatar save failed:', message);
