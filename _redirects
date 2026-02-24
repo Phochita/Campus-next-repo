@@ -1,9 +1,0 @@
-# Fix API routes
-/api/* /.netlify/functions/api/* 200
-
-# Next.js static files
-/* /.next/static/* 200
-/_next/* /.next/static/* 200
-
-# Main fix: Send all other requests to Next.js router (no more 404)
-* /index.html 200!
