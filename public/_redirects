@@ -1,0 +1,8 @@
+# 1. API routes MUST come first
+/api/*  /.netlify/functions/api/:splat  200
+
+# 2. Next.js static files (optional, usually handled by Netlify automatically)
+/_next/*  /:splat  200
+
+# 3. Main SPA redirect (The "Catch-all")
+/*  /index.html  200
