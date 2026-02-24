@@ -5,6 +5,8 @@ import { db } from '@/db';
 import { users, itemPosts } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminDashboard() {
   const cookieStore = cookies();
   const supabase = createServerClient({ cookies: () => cookieStore });
